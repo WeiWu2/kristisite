@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+        #reader { width: 500px; margin: 20px auto; transform: scaleX(-1); display: none; }
+        button { margin: 10px; padding: 10px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>QR Code Scanner</h2>
+
+    <button id="grantPermissionButton" onclick="requestCameraPermission()">Grant Camera Permission</button>
+    <button id="startScannerButton" onclick="startScanner()" style="display: none;">Start Scanner</button>
+
+    <div id="reader"></div>
+    <p id="status">Scan a QR Code</p>
+    <p id="scannedText" style="font-weight: bold;"></p>
+    
+    <script>
+        let scanner;
+        let cameraPermissionGranted = false;
+
+        function requestCameraPermission() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    stream.getTracks().forEach(track => track.stop()); // Close the stream immediately
+                    cameraPermissionGranted = true;
+                    document.getElementById("grantPermissionButton").style.display = "none";
+                    document.getElementById("startScannerButton").style.display = "inline-block";
+                    document.getElementById("status").innerText = "Camera permission granted. Click 'Start Scanner'.";
+                })
+                .catch((error) => {
+                    console.error("Error accessing camera:", error);
+                    document.getElementById("status").innerText = "Camera access denied. Please allow access.";
+                });
+        }
+
+        function fetchTextFromUrl(url) {
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    let parser = new DOMParser();
+                    let doc = parser.parseFromString(html, "text/html");
+                    let bodyText = doc.body.innerText.trim().split('\n')[0]; // Get first line of text
+                    document.getElementById("scannedText").innerText = bodyText;
+                })
+                .catch(error => console.error("Error fetching text:", error));
+        }
+
+        function onScanSuccess(decodedText) {
+            console.log("QR Code Scanned: ", decodedText);
+            document.getElementById("status").innerText = "QR Code Scanned Successfully!";
+            document.getElementById("scannedText").innerText = "Processing login";
+            scanner.stop(); // Stop scanning immediately on success
+            let newTab = window.open(decodedText, '_blank');
+            setTimeout(() => {
+                fetchTextFromUrl(decodedText);
+                if (newTab) newTab.close();
+                setTimeout(startScanner, 2000); // Restart scanner after processing
+            }, 3000);
+        }
+
+        function onScanFailure(error) {
+            console.warn(`QR Code scan error: ${error}`);
+            document.getElementById("status").innerText = "Scanning...";
+        }
+
+        function startScanner() {
+            if (!cameraPermissionGranted) {
+                document.getElementById("status").innerText = "Please grant camera permission first!";
+                return;
+            }
+
+            document.getElementById("reader").style.display = "block";
+
+            scanner = new Html5Qrcode("reader");
+            scanner.start(
+                { facingMode: "environment" }, 
+                { fps: 60, qrbox: 200, 
+                  videoConstraints: { focusMode: "continuous", advanced: [{ focusMode: "continuous" }] } 
+                }, 
+                onScanSuccess, 
+                onScanFailure
+            ).catch(error => {
+                console.error("Scanner start error:", error);
+                document.getElementById("status").innerText = "Error starting scanner";
+            });
+        }
+    </script>
+</body>
+</html>
